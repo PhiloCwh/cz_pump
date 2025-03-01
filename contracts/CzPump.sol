@@ -1,5 +1,4 @@
 
-
 // SPDX-License-Identifier: MIT
 
 //ETH
@@ -20,7 +19,8 @@ contract CzPump is Ownable{
     
 
     mapping (address => address) public tokenCreator;
-    mapping (address => bool) public lpClaim;
+
+    uint constant ONE_DAY = 86400;
 
 
 
@@ -35,8 +35,9 @@ contract CzPump is Ownable{
     mapping (address => mapping (address => uint)) public userTokenBnbBalance;
     mapping (address => uint) public tokenIdoComplitedTime;
     mapping (address => uint) public tokenClaimTime;
+    mapping (address => uint) public tokenLastTimePrice;
     mapping (address => bool) public tokenLaunched;
-    mapping (address => mapping (address => bool)) public isClaimed;
+    mapping (address => mapping (address => bool)) public isUserClaimed;
 
     //event Message
     event DeployToken(address token,string name,string symbol, address creator,string description, string image, string website,string twLink,string tgLink, uint ethAmount,uint tokenAmount,uint time);
@@ -68,14 +69,16 @@ contract CzPump is Ownable{
 
     function claimToken(address _token) public {
         require(tokenLaunched[_token],"not complited ido");
-        require(!isClaimed[msg.sender][_token],"alredy claim");
+        require(!isUserClaimed[msg.sender][_token],"alredy claim");
         require(userTokenBnbBalance[msg.sender][_token] > 0,"ido amount 0");
         IERC20(_token).transfer( msg.sender,100000000 * ONE_ETH * 5 / 100 * userTokenBnbBalance[msg.sender][_token] / tokenIdoBnbAmount[_token]);
+        userTokenBnbBalance[msg.sender][_token] = 0;
         
     }
 
     function idoComplited(address _token) public {
         require(tokenCreator[_token] == msg.sender,"not token creator");
+        require(tokenBnbBalance[_token] == tokenIdoBnbAmount[_token],"fuck");
         IERC20(_token).approve(0x10ED43C718714eb63d5aA57B78B54704E256024E, 100000000 * ONE_ETH);
         uniswapRouter.addLiquidityETH{value : tokenIdoBnbAmount[_token] / 2}(
             _token,                // ERC20 代币地址
@@ -86,12 +89,32 @@ contract CzPump is Ownable{
             block.timestamp             // 截止时间
         );
         tokenLaunched[_token] = true;
+        tokenLastTimePrice[_token] = getPrice(_token);
+        tokenClaimTime[_token] = block.timestamp;
+        payable (msg.sender).transfer(tokenIdoBnbAmount[_token] / 2);
+        
+    }
+
+    function unlockToken(address _token) public {
+        require(block.timestamp - tokenClaimTime[_token] >= 180 * ONE_DAY,"require 180 days");
+        require(tokenCreator[_token] == msg.sender,"not creator");
+        uint price = getPrice(_token);
+        require(price >= 2 * tokenLastTimePrice[_token],"price not enought");
+        IERC20(_token).transfer(msg.sender,100000000 * ONE_ETH * 5 / 100);
+        tokenLastTimePrice[_token] = getPrice(_token);
+        tokenClaimTime[_token] = block.timestamp;
+
+
+
+
     }
 
 
     function launchIdo(string memory _name,string memory _symbol,string memory _image,string memory _description,string memory _website,string memory _twLink,string memory _tgLink,uint _idoBNBAmount) public payable reEntrancyMutex() returns(address){
         address _token = factory.createToken( msg.sender,_name, _symbol,_image);
         _beForeDeployToken(_token,msg.sender);
+        tokenIdoBnbAmount[_token] = _idoBNBAmount;
+        
         emit DeployToken(_token, _name, _symbol, msg.sender, _description, _image, _website, _twLink, _tgLink, msg.value, 100000000 * ONE_ETH, block.timestamp);
         return _token;
         
@@ -103,50 +126,29 @@ contract CzPump is Ownable{
     }
 
 
-//交易逻辑
+//解锁逻辑
+    function getPrice(address _token) public view returns(uint price) {
+        address uniswapPair = IUniswapV2Factory(uniswapRouter.factory()).getPair(_token,uniswapRouter.WETH());
+        // 获取流动性池的储备量
+        IUniswapV2Pair pair = IUniswapV2Pair(uniswapPair);
+        (uint112 reserve0, uint112 reserve1, ) = pair.getReserves();
 
-    //Swap ETH for Tokens with tax
+        // 确认代币是否为 token0 或 token1
+        (uint112 tokenReserve,uint112 bnbReserve) = _token == pair.token0() ? (reserve0,reserve1) : (reserve1,reserve0);
 
-
-
-//清算逻辑
-
-
-
-//读取数据
-
-
-
-
-    function getTokenPrice(address token, uint256 amountIn) public view returns (uint256[] memory amounts) {
-        address[] memory path = new address[](2);
-        path[0] = token;
-        path[1] = uniswapRouter.WETH();
-        return uniswapRouter.getAmountsOut(amountIn, path);
+        price = tokenReserve / bnbReserve;
     }
 
-    // Get ETH price in Tokens
-    function getETHPrice(address token, uint256 amountInETH) public view returns (uint256[] memory amounts) {
-        address[] memory path = new address[](2);
-        path[0] = uniswapRouter.WETH();
-        path[1] = token;
-        return uniswapRouter.getAmountsOut(amountInETH, path);
-    }
 
-    function getAmountsOut(uint amountIn, address[] calldata path)external view returns (uint[] memory amounts){
-        return uniswapRouter.getAmountsOut(amountIn, path);
-    }
-
-    // function getAmountsOut(uint amountIn, address[] calldata path) external view returns (uint[] memory amounts);
-    function getAmountsIn(uint amountOut, address[] calldata path) external view returns (uint[] memory amounts){
-        return uniswapRouter.getAmountsIn(amountOut, path);
-    }
 }
 pragma solidity >=0.5.0;
 interface IUniswapV2Factory {
     function getPair(address tokenA, address tokenB) external view returns (address pair);
+
 }
 pragma solidity >=0.5.0;
 interface IUniswapV2Pair {
     function getReserves() external view returns (uint112 reserve0, uint112 reserve1, uint32 blockTimestampLast);
+    function token0() external view returns (address);
+    function token1() external view returns (address);
 }
