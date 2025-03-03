@@ -32,7 +32,8 @@ contract CzPump is Ownable{
 
     mapping (address => uint) public tokenIdoBnbAmount;
     mapping (address => uint) public tokenBnbBalance;
-    mapping (address => mapping (address => uint)) public userTokenBnbBalance;
+    mapping (address => mapping (address => uint)) public userIdoBnbBalance;
+    mapping (address => uint) public userMaxIdoAmount;
     mapping (address => uint) public tokenIdoComplitedTime;
     mapping (address => uint) public tokenClaimTime;
     mapping (address => uint) public tokenLastTimePrice;
@@ -62,17 +63,18 @@ contract CzPump is Ownable{
 //owner setting
 
     function ido(address _token) public payable reEntrancyMutex() {
-        require(tokenBnbBalance[_token] + msg.value <= tokenIdoBnbAmount[_token],"exceed max ido amount");
+        require(userIdoBnbBalance[msg.sender][_token] + msg.value <= userMaxIdoAmount[_token],"exceed max ido amount");
+        require(tokenBnbBalance[_token] + msg.value < tokenIdoBnbAmount[_token],"exceed max ido amount");
         tokenBnbBalance[_token] += msg.value;
-        userTokenBnbBalance[msg.sender][_token] += msg.value;
+        userIdoBnbBalance[msg.sender][_token] += msg.value;
     }
 
     function claimToken(address _token) public {
         require(tokenLaunched[_token],"not complited ido");
         require(!isUserClaimed[msg.sender][_token],"alredy claim");
-        require(userTokenBnbBalance[msg.sender][_token] > 0,"ido amount 0");
-        IERC20(_token).transfer( msg.sender,100000000 * ONE_ETH * 5 / 100 * userTokenBnbBalance[msg.sender][_token] / tokenIdoBnbAmount[_token]);
-        userTokenBnbBalance[msg.sender][_token] = 0;
+        require(userIdoBnbBalance[msg.sender][_token] > 0,"ido amount 0");
+        IERC20(_token).transfer( msg.sender,100000000 * ONE_ETH * 5 / 100 * userIdoBnbBalance[msg.sender][_token] / tokenIdoBnbAmount[_token]);
+        userIdoBnbBalance[msg.sender][_token] = 0;
         
     }
 
@@ -110,10 +112,12 @@ contract CzPump is Ownable{
     }
 
 
-    function launchIdo(string memory _name,string memory _symbol,string memory _image,string memory _description,string memory _website,string memory _twLink,string memory _tgLink,uint _idoBNBAmount) public payable reEntrancyMutex() returns(address){
+    function launchIdo(string memory _name,string memory _symbol,string memory _image,string memory _description,string memory _website,string memory _twLink,string memory _tgLink,uint _idoBNBAmount,uint _userMaxIdoAmount) public payable reEntrancyMutex() returns(address){
         address _token = factory.createToken( msg.sender,_name, _symbol,_image);
+
         _beForeDeployToken(_token,msg.sender);
         tokenIdoBnbAmount[_token] = _idoBNBAmount;
+        userMaxIdoAmount[_token] = _userMaxIdoAmount;
         
         emit DeployToken(_token, _name, _symbol, msg.sender, _description, _image, _website, _twLink, _tgLink, msg.value, 100000000 * ONE_ETH, block.timestamp);
         return _token;
