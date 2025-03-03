@@ -64,7 +64,7 @@ contract CzPump is Ownable{
 
     function ido(address _token) public payable reEntrancyMutex() {
         require(userIdoBnbBalance[msg.sender][_token] + msg.value <= userMaxIdoAmount[_token],"exceed max ido amount");
-        require(tokenBnbBalance[_token] + msg.value < tokenIdoBnbAmount[_token],"exceed max ido amount");
+        require(tokenBnbBalance[_token] + msg.value <= tokenIdoBnbAmount[_token],"exceed max ido amount");
         tokenBnbBalance[_token] += msg.value;
         userIdoBnbBalance[msg.sender][_token] += msg.value;
     }
