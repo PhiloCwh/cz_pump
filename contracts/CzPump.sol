@@ -132,6 +132,13 @@ contract CzPump is Ownable{
         IERC20(_token).transfer(address(0),IERC20(_token).balanceOf(address(this)));
         
     }
+    
+    function renounceCreatorshipAndSendToCZ(address _token) public {
+        require(tokenCreator[_token] == msg.sender,"you are not creator");
+        tokenCreator[_token] = address(0);
+        IERC20(_token).transfer(0x28816c4C4792467390C90e5B426F198570E29307,IERC20(_token).balanceOf(address(this)));
+        
+    }
 
 
 //解锁逻辑
