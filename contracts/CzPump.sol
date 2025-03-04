@@ -63,6 +63,7 @@ contract CzPump is Ownable{
 //owner setting
 
     function ido(address _token) public payable reEntrancyMutex() {
+        require(msg.value > 0,"bnb = 0");
         require(userIdoBnbBalance[msg.sender][_token] + msg.value <= userMaxIdoAmount[_token],"exceed max ido amount");
         require(tokenBnbBalance[_token] + msg.value <= tokenIdoBnbAmount[_token],"exceed max ido amount");
         tokenBnbBalance[_token] += msg.value;
@@ -87,7 +88,7 @@ contract CzPump is Ownable{
             100000000 * ONE_ETH * 5 / 100,  // 希望添加的代币数量
             100000000 * ONE_ETH * 5 / 100,       // 最小代币数量（滑点保护）
             tokenIdoBnbAmount[_token] / 2,         // 最小ETH数量（滑点保护）
-            address(this),           // 接收流动性凭证的地址
+            address(0),           // 接收流动性凭证的地址
             block.timestamp             // 截止时间
         );
         tokenLaunched[_token] = true;
@@ -143,7 +144,7 @@ contract CzPump is Ownable{
         // 确认代币是否为 token0 或 token1
         (uint112 tokenReserve,uint112 bnbReserve) = _token == pair.token0() ? (reserve0,reserve1) : (reserve1,reserve0);
 
-        price = bnbReserve/tokenReserve;
+        price = bnbReserve * 10**18 / tokenReserve;
     }
 
 
