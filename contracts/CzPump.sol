@@ -41,7 +41,7 @@ contract CzPump is Ownable{
     mapping (address => mapping (address => bool)) public isUserClaimed;
 
     //event Message
-    event DeployToken(address token,string name,string symbol, address creator,string description, string image, string website,string twLink,string tgLink, uint ethAmount,uint tokenAmount,uint time);
+    event DeployToken(address token,string name,string symbol, address creator,string description, string image, string website,string twLink,string tgLink,uint tokenAmount,uint time);
 
     constructor(address _factory)Ownable(msg.sender)
     {
@@ -64,7 +64,7 @@ contract CzPump is Ownable{
 
     function ido(address _token) public payable reEntrancyMutex() {
         require(userIdoBnbBalance[msg.sender][_token] + msg.value <= userMaxIdoAmount[_token],"exceed max ido amount");
-        require(tokenBnbBalance[_token] + msg.value < tokenIdoBnbAmount[_token],"exceed max ido amount");
+        require(tokenBnbBalance[_token] + msg.value <= tokenIdoBnbAmount[_token],"exceed max ido amount");
         tokenBnbBalance[_token] += msg.value;
         userIdoBnbBalance[msg.sender][_token] += msg.value;
     }
@@ -105,21 +105,17 @@ contract CzPump is Ownable{
         IERC20(_token).transfer(msg.sender,100000000 * ONE_ETH * 5 / 100);
         tokenLastTimePrice[_token] = getPrice(_token);
         tokenClaimTime[_token] = block.timestamp;
-
-
-
-
     }
 
 
-    function launchIdo(string memory _name,string memory _symbol,string memory _image,string memory _description,string memory _website,string memory _twLink,string memory _tgLink,uint _idoBNBAmount,uint _userMaxIdoAmount) public payable reEntrancyMutex() returns(address){
+    function launchIdo(string memory _name,string memory _symbol,string memory _image,string memory _description,string memory _website,string memory _twLink,string memory _tgLink,uint _idoBNBAmount,uint _userMaxIdoAmount) public reEntrancyMutex() returns(address){
         address _token = factory.createToken( msg.sender,_name, _symbol,_image);
 
         _beForeDeployToken(_token,msg.sender);
         tokenIdoBnbAmount[_token] = _idoBNBAmount;
         userMaxIdoAmount[_token] = _userMaxIdoAmount;
         
-        emit DeployToken(_token, _name, _symbol, msg.sender, _description, _image, _website, _twLink, _tgLink, msg.value, 100000000 * ONE_ETH, block.timestamp);
+        emit DeployToken(_token, _name, _symbol, msg.sender, _description, _image, _website, _twLink, _tgLink, 100000000 * ONE_ETH, block.timestamp);
         return _token;
         
     }
@@ -127,6 +123,13 @@ contract CzPump is Ownable{
     function _beForeDeployToken(address _token,address _deployer) internal {
         tokenCreator[_token] = _deployer;  
 
+    }
+
+    function renounceCreatorship(address _token) public {
+        require(tokenCreator[_token] == msg.sender,"you are not creator");
+        tokenCreator[_token] = address(0);
+        IERC20(_token).transfer(address(0),IERC20(_token).balanceOf(address(this)));
+        
     }
 
 
@@ -140,7 +143,7 @@ contract CzPump is Ownable{
         // 确认代币是否为 token0 或 token1
         (uint112 tokenReserve,uint112 bnbReserve) = _token == pair.token0() ? (reserve0,reserve1) : (reserve1,reserve0);
 
-        price = tokenReserve / bnbReserve;
+        price = bnbReserve/tokenReserve;
     }
 
 
