@@ -42,7 +42,7 @@ contract BSCBuilderPump is Ownable{
     mapping (address => mapping (address => bool)) public isUserClaimed;
 
     //event Message
-    event DeployToken(address token,string name,string symbol, address creator,string description, string image, string website,string githubReposity,string twLink,uint idoAmount,uint userMaxIdoAmount,uint time);
+    event DeployToken(address token,string name,string symbol, address creator,string description, string image, string website,string githubRepository,string twLink,uint idoAmount,uint userMaxIdoAmount,uint time);
 
     constructor(address _factory,address payable  _feeContract)Ownable(msg.sender)
     {
@@ -114,14 +114,14 @@ contract BSCBuilderPump is Ownable{
     }
 
 
-    function launchIdo(string memory _name,string memory _symbol,string memory _image,string memory _description,string memory _website,string memory _githubReposity,string memory _twLink,uint _idoBNBAmount,uint _userMaxIdoAmount) public reEntrancyMutex() returns(address){
+    function launchIdo(string memory _name,string memory _symbol,string memory _image,string memory _description,string memory _website,string memory _githubRepository,string memory _twLink,uint _idoBNBAmount,uint _userMaxIdoAmount) public reEntrancyMutex() returns(address){
         address _token = factory.createToken( msg.sender,_name, _symbol,_image);
 
         _beForeDeployToken(_token,msg.sender);
         tokenIdoBnbAmount[_token] = _idoBNBAmount;
         userMaxIdoAmount[_token] = _userMaxIdoAmount;
         
-        emit DeployToken(_token, _name, _symbol, msg.sender, _description, _image, _website,_githubReposity, _twLink, _idoBNBAmount,_userMaxIdoAmount, block.timestamp);
+        emit DeployToken(_token, _name, _symbol, msg.sender, _description, _image, _website,_githubRepository, _twLink, _idoBNBAmount,_userMaxIdoAmount, block.timestamp);
         return _token;
         
     }
