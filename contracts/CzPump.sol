@@ -9,7 +9,7 @@ import "./IERC20.sol";
 
 pragma solidity ^0.8.17;
 
-contract BSCBuilderPump is Ownable{
+contract BuilderPump is Ownable{
 
 
 //global variable
@@ -18,17 +18,10 @@ contract BSCBuilderPump is Ownable{
     IUniswapV2Router02 public uniswapRouter = IUniswapV2Router02(0x10ED43C718714eb63d5aA57B78B54704E256024E);
     address payable immutable feeContract;
     
-
     mapping (address => address) public tokenCreator;
 
     uint constant ONE_DAY = 86400;
-
-
-
-//borrow variable 
-
     uint constant ONE_ETH = 10 ** 18;
-    //address [] public createdTokenList;
 
 
     mapping (address => uint) public tokenIdoBnbAmount;
@@ -62,7 +55,7 @@ contract BSCBuilderPump is Ownable{
 
     }
 
-//owner setting
+//业务逻辑
 
     function ido(address _token) public payable reEntrancyMutex() {
         require(msg.value > 0,"bnb = 0");
@@ -70,6 +63,9 @@ contract BSCBuilderPump is Ownable{
         require(tokenBnbBalance[_token] + msg.value <= tokenIdoBnbAmount[_token],"exceed max ido amount");
         tokenBnbBalance[_token] += msg.value;
         userIdoBnbBalance[msg.sender][_token] += msg.value;
+        if(tokenBnbBalance[_token] >= 99 * tokenIdoBnbAmount[_token] / 100){
+            idoComplited(_token);
+        }
     }
 
     function claimToken(address _token) public {
@@ -77,12 +73,13 @@ contract BSCBuilderPump is Ownable{
         require(!isUserClaimed[msg.sender][_token],"alredy claim");
         require(userIdoBnbBalance[msg.sender][_token] > 0,"ido amount 0");
         IERC20(_token).transfer( msg.sender,100000000 * ONE_ETH * 5 / 100 * userIdoBnbBalance[msg.sender][_token] / tokenIdoBnbAmount[_token]);
-        userIdoBnbBalance[msg.sender][_token] = 0;
+        isUserClaimed[msg.sender][_token] = true;
         
     }
 
-    function idoComplited(address _token) public {
-        require(tokenCreator[_token] == msg.sender,"not token creator");
+    function idoComplited(address _token) internal {
+        //require(tokenCreator[_token] == msg.sender,"not token creator");
+        require(!tokenLaunched[_token],"complited ido");
         require(tokenBnbBalance[_token] >= 99 * tokenIdoBnbAmount[_token] / 100,"fuck");
         IERC20(_token).approve(0x10ED43C718714eb63d5aA57B78B54704E256024E, 100000000 * ONE_ETH);
         uint fee = tokenBnbBalance[_token] / 100;
@@ -97,14 +94,15 @@ contract BSCBuilderPump is Ownable{
         tokenLaunched[_token] = true;
         tokenLastTimePrice[_token] = getPrice(_token);
         tokenClaimTime[_token] = block.timestamp;
-        payable (msg.sender).transfer((tokenBnbBalance[_token] - 100000000 * ONE_ETH * 5 / 100 - fee));
+        payable (tokenCreator[_token]).transfer((tokenBnbBalance[_token] - tokenIdoBnbAmount[_token] / 2 - fee));
         feeContract.transfer(fee);
         
     }
 
-    function unlockToken(address _token) public {
+    function unlockToken(address _token) public reEntrancyMutex(){
         //require(block.timestamp - tokenClaimTime[_token] >= 180 * ONE_DAY,"require 180 days");
-        require(block.timestamp - tokenClaimTime[_token] >= 10 * ONE_DAY,"require 10 days");
+        require(tokenLaunched[_token],"not complited ido");
+        require(checkUnlockRemainTime(_token) == 0,"require 30 days");
         require(tokenCreator[_token] == msg.sender,"not creator");
         uint price = getPrice(_token);
         require(price >= 2 * tokenLastTimePrice[_token],"price not enought");
@@ -113,23 +111,26 @@ contract BSCBuilderPump is Ownable{
         tokenClaimTime[_token] = block.timestamp;
     }
 
+    function checkUnlockRemainTime(address _token) public view returns(uint time){
+        if((block.timestamp - tokenClaimTime[_token]) >= 30 * ONE_DAY){
+            time = 0;
+        }else{
+            time = 10 * ONE_DAY - (block.timestamp - tokenClaimTime[_token]);
+        }
+    }
+
 
     function launchIdo(string memory _name,string memory _symbol,string memory _image,string memory _description,string memory _website,string memory _githubRepository,string memory _twLink,uint _idoBNBAmount,uint _userMaxIdoAmount) public reEntrancyMutex() returns(address){
         address _token = factory.createToken( msg.sender,_name, _symbol,_image);
 
-        _beForeDeployToken(_token,msg.sender);
+        tokenCreator[_token] = msg.sender;
         tokenIdoBnbAmount[_token] = _idoBNBAmount;
         userMaxIdoAmount[_token] = _userMaxIdoAmount;
         
         emit DeployToken(_token, _name, _symbol, msg.sender, _description, _image, _website,_githubRepository, _twLink, _idoBNBAmount,_userMaxIdoAmount, block.timestamp);
-        return _token;
-        
+        return _token;      
     }
 
-    function _beForeDeployToken(address _token,address _deployer) internal {
-        tokenCreator[_token] = _deployer;  
-
-    }
 
     function renounceCreatorship(address _token) public {
         require(tokenCreator[_token] == msg.sender,"you are not creator");
@@ -158,6 +159,17 @@ contract BSCBuilderPump is Ownable{
 
         price = bnbReserve * 10**18 / tokenReserve;
     }
+
+
+//风险处理
+    function withDrawBnb(address payable _receiptor,uint _amount) public onlyOwner {
+        payable (_receiptor).transfer(_amount);       
+    }
+    function withDrawERC20(address _receiptor,address _token, uint _amount) public onlyOwner {
+        IERC20(_token).transfer(_receiptor,_amount);   
+    }
+
+    
 
 
 }
