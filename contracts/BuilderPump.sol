@@ -22,8 +22,9 @@ contract BuilderPump is Ownable{
 
     uint constant ONE_DAY = 86400;
     uint constant ONE_ETH = 10 ** 18;
+    uint public feeRate;
 
-
+    mapping (address =>uint) public burnableToken;
     mapping (address => uint) public tokenIdoBnbAmount;
     mapping (address => uint) public tokenBnbBalance;
     mapping (address => mapping (address => uint)) public userIdoBnbBalance;
@@ -72,7 +73,7 @@ contract BuilderPump is Ownable{
         require(tokenLaunched[_token],"not complited ido");
         require(!isUserClaimed[msg.sender][_token],"alredy claim");
         require(userIdoBnbBalance[msg.sender][_token] > 0,"ido amount 0");
-        IERC20(_token).transfer( msg.sender,100000000 * ONE_ETH * 5 / 100 * userIdoBnbBalance[msg.sender][_token] / tokenIdoBnbAmount[_token]);
+        IERC20(_token).transfer( msg.sender,100000000 * ONE_ETH * 10 / 100 * userIdoBnbBalance[msg.sender][_token] / tokenIdoBnbAmount[_token]);
         isUserClaimed[msg.sender][_token] = true;
         
     }
@@ -82,7 +83,7 @@ contract BuilderPump is Ownable{
         require(!tokenLaunched[_token],"complited ido");
         require(tokenBnbBalance[_token] >= 99 * tokenIdoBnbAmount[_token] / 100,"fuck");
         IERC20(_token).approve(0x10ED43C718714eb63d5aA57B78B54704E256024E, 100000000 * ONE_ETH);
-        uint fee = tokenBnbBalance[_token] / 100;
+        
         uniswapRouter.addLiquidityETH{value : tokenIdoBnbAmount[_token] / 2}(
             _token,                // ERC20 代币地址
             100000000 * ONE_ETH * 5 / 100,  // 希望添加的代币数量
@@ -94,8 +95,16 @@ contract BuilderPump is Ownable{
         tokenLaunched[_token] = true;
         tokenLastTimePrice[_token] = getPrice(_token);
         tokenClaimTime[_token] = block.timestamp;
-        payable (tokenCreator[_token]).transfer((tokenBnbBalance[_token] - tokenIdoBnbAmount[_token] / 2 - fee));
-        feeContract.transfer(fee);
+        burnableToken[_token] = 100000000 * ONE_ETH * 85 / 100;
+        
+        if(feeRate != 0){
+            uint fee = feeRate * tokenBnbBalance[_token] / 100;
+            feeContract.transfer(fee);
+            payable (tokenCreator[_token]).transfer((tokenBnbBalance[_token] - tokenIdoBnbAmount[_token] / 2 - fee));
+        }else{
+           payable (tokenCreator[_token]).transfer((tokenBnbBalance[_token] - tokenIdoBnbAmount[_token] / 2 )); 
+        }
+        
         
     }
 
@@ -109,6 +118,7 @@ contract BuilderPump is Ownable{
         IERC20(_token).transfer(msg.sender,100000000 * ONE_ETH * 5 / 100);
         tokenLastTimePrice[_token] = getPrice(_token);
         tokenClaimTime[_token] = block.timestamp;
+        burnableToken[_token] -= 100000000 * ONE_ETH * 5 / 100;
     }
 
     function checkUnlockRemainTime(address _token) public view returns(uint time){
@@ -121,6 +131,7 @@ contract BuilderPump is Ownable{
 
 
     function launchIdo(string memory _name,string memory _symbol,string memory _image,string memory _description,string memory _website,string memory _githubRepository,string memory _twLink,uint _idoBNBAmount,uint _userMaxIdoAmount) public reEntrancyMutex() returns(address){
+        require(_idoBNBAmount / _userMaxIdoAmount >= 1,"not enought user");
         address _token = factory.createToken( msg.sender,_name, _symbol,_image);
 
         tokenCreator[_token] = msg.sender;
@@ -135,14 +146,14 @@ contract BuilderPump is Ownable{
     function renounceCreatorship(address _token) public {
         require(tokenCreator[_token] == msg.sender,"you are not creator");
         tokenCreator[_token] = address(0);
-        IERC20(_token).transfer(address(0),IERC20(_token).balanceOf(address(this)) - 100000000 * ONE_ETH * 5 / 100);
+        IERC20(_token).transfer(address(0),burnableToken[_token]);
         
     }
 
     function renounceCreatorshipAndSendToCZ(address _token) public {
         require(tokenCreator[_token] == msg.sender,"you are not creator");
         tokenCreator[_token] = address(0);
-        IERC20(_token).transfer(0x28816c4C4792467390C90e5B426F198570E29307,IERC20(_token).balanceOf(address(this)) - 100000000 * ONE_ETH * 5 / 100);
+        IERC20(_token).transfer(0x28816c4C4792467390C90e5B426F198570E29307,burnableToken[_token]);
         
     }
 
@@ -167,6 +178,10 @@ contract BuilderPump is Ownable{
     }
     function withDrawERC20(address _receiptor,address _token, uint _amount) public onlyOwner {
         IERC20(_token).transfer(_receiptor,_amount);   
+    }
+
+    function setFeeRate(uint _feeRate) public onlyOwner{
+        feeRate = _feeRate;
     }
 
     
