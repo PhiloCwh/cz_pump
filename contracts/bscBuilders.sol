@@ -18,7 +18,7 @@ contract bscBuilders is ERC721,Ownable{
     string public baseURI;
     string public constant baseExtension = ".json";
     uint256 constant ONE_ETHER = 10 ** 18;
-    string public unrevealTokenURI;
+    string public unRevealTokenURI;
     uint256 public totalSupply;
     uint256 public maxTotalSupply = 3000;
     bool isReveal;
@@ -50,12 +50,16 @@ contract bscBuilders is ERC721,Ownable{
     }
 
     function setUnrevealTokenURI(string memory _tokenURI) public onlyOwner {
-        unrevealTokenURI = _tokenURI;
+        unRevealTokenURI = _tokenURI;
     }
 
     function setBaseURI(string memory _baseURI) external onlyOwner {
         baseURI = _baseURI;
     } 
+
+    function setUnreveal(string memory _unRevealURI) external onlyOwner {
+        unRevealTokenURI = _unRevealURI;
+    }
 
     function setReveal() public onlyOwner {
         isReveal = !isReveal;
@@ -115,7 +119,7 @@ contract bscBuilders is ERC721,Ownable{
         returns (string memory)
     {
         if(isReveal){
-            return unrevealTokenURI;
+            return unRevealTokenURI;
         }else{
             return  string(abi.encodePacked(baseURI,tokenId.toString(),baseExtension));
         }
