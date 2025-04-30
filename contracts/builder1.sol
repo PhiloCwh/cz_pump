@@ -1,1 +1,154 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.9;
 
+import "@openzeppelin/contracts/utils/Strings.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/utils/Counters.sol";
+
+contract bscBuilders is ERC721,Ownable{
+    using Counters for Counters.Counter;
+    using Strings for uint256;
+
+    Counters.Counter private _tokenIdCounter;
+
+    IERC20 ERC20;
+
+    string public baseURI;
+    string public constant baseExtension = ".json";
+    uint256 constant ONE_ETHER = 10 ** 18;
+    string public unRevealTokenURI;
+    uint256 public totalSupply;
+    uint256 public maxTotalSupply = 3000;
+    bool isReveal;
+    bool starPublic;
+    bool starFallBack;
+    uint256 constant nftPrice = 1e18;
+    uint256 constant nftWlPrice = 5e17;
+
+
+    mapping (address => bool) public whiteList;
+
+    constructor()Ownable(msg.sender) ERC721("Builders", "Builders") {}
+
+
+    fallback() external payable {
+    }
+
+    receive() external payable { }
+
+    //set
+
+    function setWhiteList(address _user) internal {
+        whiteList[_user] = true;
+    }
+
+    function setWhiteListByList(address [] memory _user) public onlyOwner{
+        for (uint256 i = 0 ;i < _user.length; i++){
+            whiteList[_user[i]] = true;
+        }
+    }
+
+    function setUnrevealTokenURI(string memory _tokenURI) public onlyOwner {
+        unRevealTokenURI = _tokenURI;
+    }
+
+    function setBaseURI(string memory _baseURI) external onlyOwner {
+        baseURI = _baseURI;
+    } 
+
+    function setUnreveal(string memory _unRevealURI) external onlyOwner {
+        unRevealTokenURI = _unRevealURI;
+    }
+
+    function setReveal() public onlyOwner {
+        isReveal = !isReveal;
+    }
+
+    function setStarPublicRound() public onlyOwner {
+        starPublic = !starPublic;
+    }
+
+    function setStarFallBackNFT() public onlyOwner {
+        starFallBack = !starFallBack;
+    }
+
+    function safeMint(address _to) internal {
+        require(totalSupply + 1 <= maxTotalSupply,"exceed max supply");
+        uint256 tokenId = _tokenIdCounter.current();
+        _tokenIdCounter.increment();
+        _safeMint(_to, tokenId);
+        totalSupply++;
+    }
+
+    function mintWithWhiteList() public payable  {
+        require(whiteList[msg.sender],"you are didn it whitelist");
+        require(msg.value == nftWlPrice,"require 0.5BNB");
+        whiteList[msg.sender] = false;
+        safeMint(msg.sender);
+    }
+
+    function mintPublic() public payable {
+        require(starPublic,"public Round didnt star");
+        require(msg.value == nftPrice,"require 1BNB");
+        safeMint(msg.sender);
+    }
+
+    function mintPublicByAmount(uint256 _amount) public payable {
+        require(starPublic,"public Round didnt star");
+        require(msg.value == (nftPrice * _amount),"require exact BNB");
+        safeMintByAmount(_amount,msg.sender);
+    }
+
+    function safeMintByAmount(uint _amount,address _to) internal {
+        for(uint i; i < _amount; i++){
+            safeMint(_to);
+        }
+    }
+
+    function withdrawToken(address _ERC20) external onlyOwner{
+        IERC20 ERC20W = IERC20(_ERC20);
+        ERC20W.transfer(msg.sender,ERC20W.balanceOf(address(this)));
+    }
+
+    function withdrawNFTByTokenId(uint256 [] memory _tokenIdList) external onlyOwner {
+        for(uint i; i < _tokenIdList.length; i++){
+            _transfer(address(this), msg.sender, _tokenIdList[i]);
+        }
+    }
+
+    function withdrawBNB(uint _amount) external onlyOwner {
+        payable (msg.sender).transfer(_amount);
+    }
+
+
+    function withdrawAllBNB() external onlyOwner {
+        payable (msg.sender).transfer(address(this).balance);
+    }
+
+    
+
+    function fallBackNFTGetBNB(uint256 _tokenId) public {
+        require(starFallBack,"fall back NFT not started");
+        transferFrom(msg.sender, address(this), _tokenId);
+        payable (msg.sender).transfer(1e18);
+    }
+
+
+
+    function tokenURI(uint256 tokenId)
+        public
+        view
+        override(ERC721)
+        returns (string memory)
+    {
+        if(!isReveal){
+            return unRevealTokenURI;
+        }else{
+            return  string(abi.encodePacked(baseURI,tokenId.toString(),baseExtension));
+        }
+        
+
+    }
+}
